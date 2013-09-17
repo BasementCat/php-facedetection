@@ -26,7 +26,7 @@ class FaceDetector
 
     protected $detection_data;
     protected $canvas;
-    protected $face;
+    protected $faces;
     private $reduced_canvas;
 
     public function __construct($detection_file = 'detection.dat')
@@ -36,6 +36,7 @@ class FaceDetector
         } else {
             throw new Exception("Couldn't load detection data");
         }
+        $this->faces = array();
     }
 
     public function faceDetect($file)
@@ -84,29 +85,30 @@ class FaceDetector
 
             $stats = $this->getImgStats($this->reduced_canvas);
 
-            $this->face = $this->doDetectGreedyBigToSmall(
+            $this->doDetectGreedyBigToSmall(
                 $stats['ii'],
                 $stats['ii2'],
                 $stats['width'],
                 $stats['height']
             );
 
-            if ($this->face['w'] > 0) {
-                $this->face['x'] *= $ratio;
-                $this->face['y'] *= $ratio;
-                $this->face['w'] *= $ratio;
+            for ($i = 0; $i < count($this->faces); $i++)
+            {
+                $this->faces[$i]['x'] *= $ratio;
+                $this->faces[$i]['y'] *= $ratio;
+                $this->faces[$i]['w'] *= $ratio;
             }
         } else {
             $stats = $this->getImgStats($this->canvas);
 
-            $this->face = $this->doDetectGreedyBigToSmall(
+            $this->doDetectGreedyBigToSmall(
                 $stats['ii'],
                 $stats['ii2'],
                 $stats['width'],
                 $stats['height']
             );
         }
-        return ($this->face['w'] > 0);
+        return count($this->faces);
     }
 
 
@@ -114,14 +116,17 @@ class FaceDetector
     {
         $color = imagecolorallocate($this->canvas, 255, 0, 0); //red
 
-        imagerectangle(
-            $this->canvas,
-            $this->face['x'],
-            $this->face['y'],
-            $this->face['x']+$this->face['w'],
-            $this->face['y']+ $this->face['w'],
-            $color
-        );
+        foreach ($this->faces as $face)
+        {
+            imagerectangle(
+                $this->canvas,
+                $face['x'],
+                $face['y'],
+                $face['x']+$face['w'],
+                $face['y']+ $face['w'],
+                $color
+            );
+        }
 
         header('Content-type: image/jpeg');
         imagejpeg($this->canvas);
@@ -129,12 +134,12 @@ class FaceDetector
 
     public function toJson()
     {
-        return json_encode($this->face);
+        return json_encode($this->faces);
     }
 
-    public function getFace()
+    public function getFaces()
     {
-        return $this->face;
+        return $this->faces;
     }
 
     protected function getImgStats($canvas)
@@ -202,7 +207,11 @@ class FaceDetector
                 for ($x = 0; $x < $endx; $x += $step) {
                     $passed = $this->detectOnSubImage($x, $y, $scale, $ii, $ii2, $w, $width+1, $inv_area);
                     if ($passed) {
-                        return array('x'=>$x, 'y'=>$y, 'w'=>$w);
+                        if ($w > 0)
+                        {
+                            // return array('x'=>$x, 'y'=>$y, 'w'=>$w);
+                            $this->faces[] = array('x' => $x, 'y' => $y, 'w' => $w);
+                        }
                     }
                 } // end x
             } // end y
